@@ -1,0 +1,6 @@
+@EduWalletApp_HostAddress = http://localhost:5199
+
+GET {{EduWalletApp_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
