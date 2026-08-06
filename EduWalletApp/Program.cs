@@ -1,6 +1,7 @@
 
-using EduWalletApp.Models;
 using EduWalletApp.Data;
+using EduWalletApp.Models;
+using EduWalletApp.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
@@ -89,6 +90,8 @@ namespace EduWalletApp
 
                 options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             });
+            builder.Services.AddScoped<FinanceCalculator>();
+            builder.Services.AddScoped<ArchetypeCalculator>();
 
             var app = builder.Build();
 
