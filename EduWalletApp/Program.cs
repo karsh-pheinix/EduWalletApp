@@ -106,6 +106,7 @@ namespace EduWalletApp
             }
 
             app.UseHttpsRedirection();
+            app.UseStaticFiles();
             app.UseCors("AllowFrontend");
 
             app.UseAuthentication();
