@@ -22,10 +22,14 @@ namespace EduWalletApp.Controllers
             _calculator = calculator;
         }
 
+        private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+        // ---------- Create ----------
+
         [HttpPost("{budgetId}/generate")]
         public async Task<IActionResult> GenerateReport(int budgetId)
         {
-            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var userId = CurrentUserId;
 
             var user = await _context.Users.FindAsync(userId);
             var budget = await _context.Budgets
@@ -60,17 +64,18 @@ namespace EduWalletApp.Controllers
             return Ok(new { reportId = report.Id });
         }
 
+        // ---------- Read (all) ----------
+
         [HttpGet]
         public async Task<IActionResult> GetReports()
         {
-            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-
             var reports = await _context.Reports
-                .Where(r => r.UserId == userId)
+                .Where(r => r.UserId == CurrentUserId)
                 .OrderByDescending(r => r.GeneratedAt)
                 .Select(r => new
                 {
                     r.Id,
+                    r.BudgetId,
                     r.ArchetypeAtGeneration,
                     r.TotalIncome,
                     r.TotalSavings,
@@ -82,6 +87,48 @@ namespace EduWalletApp.Controllers
                 .ToListAsync();
 
             return Ok(reports);
+        }
+
+        // ---------- Read (single) ----------
+
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetReport(int id)
+        {
+            var report = await _context.Reports
+                .Where(r => r.Id == id && r.UserId == CurrentUserId)
+                .Select(r => new
+                {
+                    r.Id,
+                    r.BudgetId,
+                    r.ArchetypeAtGeneration,
+                    r.TotalIncome,
+                    r.TotalSavings,
+                    r.TotalMandatoryExpenses,
+                    r.TotalDisposableIncome,
+                    r.TotalActualSpend,
+                    r.GeneratedAt
+                })
+                .FirstOrDefaultAsync();
+
+            if (report == null) return NotFound();
+
+            return Ok(report);
+        }
+
+        // ---------- Delete ----------
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteReport(int id)
+        {
+            var report = await _context.Reports
+                .FirstOrDefaultAsync(r => r.Id == id && r.UserId == CurrentUserId);
+
+            if (report == null) return NotFound();
+
+            _context.Reports.Remove(report);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
         }
     }
 }

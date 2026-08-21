@@ -1,4 +1,3 @@
-
 using EduWalletApp.Data;
 using EduWalletApp.Models;
 using EduWalletApp.Services;
@@ -16,7 +15,6 @@ namespace EduWalletApp
     {
         static void Main(string[] args)
         {
-
             var builder = WebApplication.CreateBuilder(args);
 
             // --- Database setup ---
@@ -59,7 +57,7 @@ namespace EduWalletApp
             {
                 options.AddPolicy("AllowFrontend", policy =>
                 {
-                    policy.WithOrigins("http://localhost:5173", "http://localhost:5174")
+                    policy.WithOrigins("http://localhost:5173", "http://localhost:5174", "http://localhost:5177")
                         .AllowAnyHeader()
                         .AllowAnyMethod()
                         .AllowCredentials();
@@ -90,12 +88,15 @@ namespace EduWalletApp
 
                 options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             });
+
+            // --- Application Services (DI Registration) ---
             builder.Services.AddScoped<FinanceCalculator>();
             builder.Services.AddScoped<ArchetypeCalculator>();
+            builder.Services.AddScoped<IDashboardService, DashboardService>();
 
             var app = builder.Build();
 
-            // --- Global exception handling — first middleware, catches everything after it ---
+            // --- Global exception handling ---
             app.UseMiddleware<EduWalletApp.Middleware.ExceptionHandlingMiddleware>();
 
             // --- Middleware pipeline ---
@@ -105,9 +106,19 @@ namespace EduWalletApp
                 app.UseSwaggerUI();
             }
 
-            app.UseHttpsRedirection();
+            // Comment out HTTPS Redirection during pure HTTP local testing to fix:
+            // "Failed to determine the https port for redirect."
+            // app.UseHttpsRedirection();
+
+            app.UseCors("AllowFrontend"); // Ensure CORS runs BEFORE authentication & static files
+
+            // Create wwwroot if missing to suppress StaticFileMiddleware warning
+            var wwwroot = Path.Combine(app.Environment.ContentRootPath, "wwwroot");
+            if (!Directory.Exists(wwwroot))
+            {
+                Directory.CreateDirectory(wwwroot);
+            }
             app.UseStaticFiles();
-            app.UseCors("AllowFrontend");
 
             app.UseAuthentication();
             app.UseAuthorization();

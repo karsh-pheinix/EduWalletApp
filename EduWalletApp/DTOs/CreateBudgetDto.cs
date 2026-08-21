@@ -12,5 +12,6 @@
         public int? SubCategoryId { get; set; }
         public decimal Amount { get; set; }
         public string? LocationTag { get; set; }
+        public bool ManualReview { get; set; }
     }
 }

@@ -62,5 +62,42 @@ namespace EduWalletApp.Controllers
 
             return Ok(allocations);
         }
+        [HttpGet]
+        public async Task<IActionResult> GetTransactions()
+        {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+            var transactions = await _context.Transactions
+                .Where(t => t.UserId == userId)
+                .OrderByDescending(t => t.Date)
+                .Select(t => new
+                {
+                    t.Id,
+                    t.Amount,
+                    t.Date,
+                    t.LocationTag,
+                    CategoryName = t.Category.Name,
+                    SubCategoryName = t.SubCategory != null ? t.SubCategory.Name : null
+                })
+                .ToListAsync();
+
+            return Ok(transactions);
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteTransaction(int id)
+        {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+            var transaction = await _context.Transactions
+                .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
+
+            if (transaction == null) return NotFound();
+
+            _context.Transactions.Remove(transaction);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
+        }
     }
 }

@@ -1,8 +1,7 @@
-﻿using EduWalletApp.Data;
+﻿using EduWalletApp.DTOs;
 using EduWalletApp.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
 namespace EduWalletApp.Controllers
@@ -12,45 +11,31 @@ namespace EduWalletApp.Controllers
     [Authorize]
     public class DashboardController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
-        private readonly FinanceCalculator _calculator;
+        private readonly IDashboardService _dashboardService;
+        private readonly ILogger<DashboardController> _logger;
 
-        public DashboardController(ApplicationDbContext context, FinanceCalculator calculator)
+        public DashboardController(IDashboardService dashboardService, ILogger<DashboardController> logger)
         {
-            _context = context;
-            _calculator = calculator;
+            _dashboardService = dashboardService;
+            _logger = logger;
         }
 
+        private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
         [HttpGet("summary")]
-        public async Task<IActionResult> GetSummary()
+        [ProducesResponseType(typeof(DashboardSummaryDto), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetSummary() // Updated from Task to Task<IActionResult>
         {
-            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-
-            var user = await _context.Users.FindAsync(userId);
-            var incomes = await _context.IncomeSources.Where(i => i.UserId == userId && i.IsActive).ToListAsync();
-            var mandatoryExpenses = await _context.Expenses
-                .Where(e => e.UserId == userId && e.IsMandatory).ToListAsync();
-            var budget = await _context.Budgets
-                .Where(b => b.UserId == userId)
-                .OrderByDescending(b => b.CreatedAt)
-                .FirstOrDefaultAsync();
-
-            var savingsGoal = budget?.SavingsGoalPercentage ?? 0;
-
-            var totalIncome = incomes.Sum(i => _calculator.ToMonthlyEquivalent(i.Amount, i.Frequency));
-            var totalMandatory = mandatoryExpenses.Sum(e => _calculator.ToMonthlyEquivalent(e.Amount, e.Frequency));
-            var savingsAmount = totalIncome * (savingsGoal / 100);
-            var disposable = _calculator.CalculateDisposableIncome(incomes, mandatoryExpenses, savingsGoal);
-
-            return Ok(new
+            try
             {
-                totalIncome,
-                savingsAmount,
-                totalMandatory,
-                disposableIncome = disposable,
-                dailyEquivalent = disposable / 22,
-                archetype = user?.Archetype?.ToString()
-            });
+                var summary = await _dashboardService.GetUserDashboardSummaryAsync(CurrentUserId);
+                return Ok(summary);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve dashboard summary for UserId {UserId}", CurrentUserId);
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred while building your financial summary." });
+            }
         }
     }
 }

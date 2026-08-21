@@ -41,7 +41,8 @@ namespace EduWalletApp.Controllers
                     UserId = userId,
                     Source = dto.Source,
                     Amount = dto.Amount,
-                    Frequency = dto.Frequency
+                    Frequency = dto.Frequency,
+                    IsActive = true // <-- CRITICAL FIX: Ensure it shows up in the IncomeSourceController
                 });
             }
 

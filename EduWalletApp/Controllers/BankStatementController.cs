@@ -122,5 +122,43 @@ namespace EduWalletApp.Controllers
                 Amount = Math.Round((decimal)(random.NextDouble() * 200 + 20), 2)
             }).ToList();
         }
+        [HttpGet]
+        public async Task<IActionResult> GetStatements()
+        {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+            var statements = await _context.BankStatements
+                .Where(s => s.UserId == userId)
+                .OrderByDescending(s => s.UploadedAt)
+                .Select(s => new
+                {
+                    s.Id,
+                    s.FileName,
+                    s.FileType,
+                    s.UploadedAt,
+                    TransactionCount = s.StatementTransactions.Count()
+                })
+                .ToListAsync();
+
+            return Ok(statements);
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteStatement(int id)
+        {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+            var statement = await _context.BankStatements
+                .Include(s => s.StatementTransactions)
+                .FirstOrDefaultAsync(s => s.Id == id && s.UserId == userId);
+
+            if (statement == null) return NotFound();
+
+            _context.StatementTransactions.RemoveRange(statement.StatementTransactions);
+            _context.BankStatements.Remove(statement);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
+        }
     }
 }
