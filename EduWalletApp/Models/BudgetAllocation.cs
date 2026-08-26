@@ -19,7 +19,7 @@ namespace EduWalletApp.Models
         public SubCategory? SubCategory { get; set; }
 
         [Required]
-        public decimal Amount { get; set; }
+        public decimal BudgetedAmount { get; set; }
 
         public string? LocationTag { get; set; }
 

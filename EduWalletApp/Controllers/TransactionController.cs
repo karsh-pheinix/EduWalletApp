@@ -1,6 +1,7 @@
 ﻿using EduWalletApp.Data;
 using EduWalletApp.DTOs;
 using EduWalletApp.Models;
+using EduWalletApp.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,16 +15,36 @@ namespace EduWalletApp.Controllers
     public class TransactionController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IActivityLogger _activityLogger;
+        private readonly IFinancialAlertService _alertService;
 
-        public TransactionController(ApplicationDbContext context)
+        public TransactionController(ApplicationDbContext context, IActivityLogger activityLogger, IFinancialAlertService alertService)
         {
             _context = context;
+            _activityLogger = activityLogger;
+            _alertService = alertService;
         }
 
         [HttpPost]
         public async Task<IActionResult> AddTransaction([FromBody] CreateTransactionDto dto)
         {
             var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+            if (dto.BudgetAllocationId.HasValue)
+            {
+                var allocation = await _context.BudgetAllocations
+                    .Where(a => a.Id == dto.BudgetAllocationId.Value && a.Budget.UserId == userId)
+                    .Select(a => new { a.CategoryId, a.SubCategoryId })
+                    .FirstOrDefaultAsync();
+                if (allocation == null) return BadRequest("The selected budget allocation is invalid.");
+
+                dto.CategoryId = allocation.CategoryId;
+                dto.SubCategoryId = allocation.SubCategoryId;
+            }
+            else if (!await _context.Categories.AnyAsync(category => category.Id == dto.CategoryId && category.IsActive))
+            {
+                return BadRequest("The selected category is invalid.");
+            }
 
             var transaction = new Transaction
             {
@@ -38,6 +59,8 @@ namespace EduWalletApp.Controllers
 
             _context.Transactions.Add(transaction);
             await _context.SaveChangesAsync();
+            await _activityLogger.LogAsync(userId, "CreatedTransaction", $"amount={transaction.Amount}");
+            await _alertService.CheckAndCreateAlertsAsync(userId);
 
             return Ok(new { transactionId = transaction.Id });
         }
@@ -47,28 +70,39 @@ namespace EduWalletApp.Controllers
         [HttpGet("variance/{budgetId}")]
         public async Task<IActionResult> GetVariance(int budgetId)
         {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
             var allocations = await _context.BudgetAllocations
-                .Where(a => a.BudgetId == budgetId)
+                .Where(a => a.BudgetId == budgetId && a.Budget.UserId == userId)
                 .Include(a => a.Transactions)
                 .Select(a => new
                 {
                     a.Id,
+                    a.CategoryId,
+                    a.SubCategoryId,
                     CategoryName = a.Category.Name,
-                    Planned = a.Amount,
+                    Planned = a.BudgetedAmount,
                     Actual = a.Transactions.Sum(t => t.Amount),
-                    Variance = a.Amount - a.Transactions.Sum(t => t.Amount)
+                    Variance = a.BudgetedAmount - a.Transactions.Sum(t => t.Amount)
                 })
                 .ToListAsync();
 
             return Ok(allocations);
         }
         [HttpGet]
-        public async Task<IActionResult> GetTransactions()
+        public async Task<IActionResult> GetTransactions([FromQuery] int? budgetId = null)
         {
             var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-            var transactions = await _context.Transactions
-                .Where(t => t.UserId == userId)
+            var query = _context.Transactions.Where(t => t.UserId == userId);
+
+            if (budgetId.HasValue)
+            {
+                query = query.Where(t => t.BudgetAllocationId != null
+                    && t.BudgetAllocation!.BudgetId == budgetId.Value);
+            }
+
+            var transactions = await query
                 .OrderByDescending(t => t.Date)
                 .Select(t => new
                 {

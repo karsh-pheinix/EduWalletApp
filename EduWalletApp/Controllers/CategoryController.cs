@@ -1,6 +1,7 @@
 ﻿using EduWalletApp.Data;
 using EduWalletApp.Models;
 using EduWalletApp.Models.Dtos;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +9,7 @@ namespace EduWalletApp.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class CategoryController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -21,6 +23,7 @@ namespace EduWalletApp.Controllers
         public async Task<IActionResult> GetCategories()
         {
             var categories = await _context.Categories
+                .Where(c => c.IsActive)
                 .Select(c => new
                 {
                     c.Id,
@@ -33,6 +36,7 @@ namespace EduWalletApp.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CreateCategory([FromBody] CreateCategoryDto dto)
         {
             if (!ModelState.IsValid)
@@ -56,6 +60,7 @@ namespace EduWalletApp.Controllers
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UpdateCategory(int id, [FromBody] CreateCategoryDto dto)
         {
             if (!ModelState.IsValid)
@@ -77,6 +82,7 @@ namespace EduWalletApp.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteCategory(int id)
         {
             var category = await _context.Categories

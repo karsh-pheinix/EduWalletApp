@@ -1,6 +1,7 @@
 ﻿using EduWalletApp.Data;
 using EduWalletApp.DTOs;
 using EduWalletApp.Models;
+using EduWalletApp.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -19,17 +20,20 @@ namespace EduWalletApp.Controllers
         private readonly ApplicationDbContext _context;
         private readonly IConfiguration _configuration;
         private readonly ILogger<AuthController> _logger;
+        private readonly IActivityLogger _activityLogger;
 
         public AuthController(
             UserManager<User> userManager,
             ApplicationDbContext context,
             IConfiguration configuration,
-            ILogger<AuthController> logger)
+            ILogger<AuthController> logger,
+            IActivityLogger activityLogger)
         {
             _userManager = userManager;
             _context = context;
             _configuration = configuration;
             _logger = logger;
+            _activityLogger = activityLogger;
         }
 
         [HttpPost("register")]
@@ -62,6 +66,8 @@ namespace EduWalletApp.Controllers
                 return BadRequest(result.Errors);
             }
 
+            await _userManager.AddToRoleAsync(user, "User");
+            await _activityLogger.LogAsync(user.Id, "Registered");
             _logger.LogInformation("New user registered: {Email} (Id: {UserId})", dto.Email, user.Id);
             return Ok(new { message = "Registration successful", userId = user.Id });
         }
@@ -77,6 +83,9 @@ namespace EduWalletApp.Controllers
                 return Unauthorized("Invalid email or password.");
             }
 
+            if (user.LockoutEnabled && user.LockoutEnd.HasValue && user.LockoutEnd > DateTimeOffset.UtcNow)
+                return StatusCode(StatusCodes.Status403Forbidden, "This account has been disabled. Please contact support.");
+
             var passwordValid = await _userManager.CheckPasswordAsync(user, dto.Password);
             if (!passwordValid)
             {
@@ -86,23 +95,30 @@ namespace EduWalletApp.Controllers
 
             _logger.LogInformation("Successful login: {Email} (Id: {UserId})", dto.Email, user.Id);
 
-            var accessToken = GenerateAccessToken(user);
+            var roles = await _userManager.GetRolesAsync(user);
+            await _activityLogger.LogAsync(user.Id, "LoggedIn");
+
+            var accessToken = await GenerateAccessToken(user);
 
             return Ok(new
             {
                 accessToken,
                 expiresAt = DateTime.UtcNow.AddHours(2),
-                onboardingComplete = user.OnboardingComplete
+                onboardingComplete = user.OnboardingComplete,
+                isAdmin = roles.Contains("Admin")
             });
         }
 
-        private string GenerateAccessToken(User user)
+        private async Task<string> GenerateAccessToken(User user)
         {
+            var roles = await _userManager.GetRolesAsync(user);
             var claims = new List<Claim>
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Email, user.Email ?? string.Empty)
             };
+
+            claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
 
             var key = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));

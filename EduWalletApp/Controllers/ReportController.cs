@@ -39,7 +39,8 @@ namespace EduWalletApp.Controllers
             var incomes = await _context.IncomeSources.Where(i => i.UserId == userId && i.IsActive).ToListAsync();
             var mandatory = await _context.Expenses.Where(e => e.UserId == userId && e.IsMandatory).ToListAsync();
             var actualSpend = await _context.Transactions
-                .Where(t => t.UserId == userId).SumAsync(t => t.Amount);
+                .Where(t => t.UserId == userId && t.Date >= budget.StartDate && t.Date <= budget.EndDate)
+                .SumAsync(t => t.Amount);
 
             var totalIncome = incomes.Sum(i => _calculator.ToMonthlyEquivalent(i.Amount, i.Frequency));
             var totalMandatory = mandatory.Sum(e => _calculator.ToMonthlyEquivalent(e.Amount, e.Frequency));

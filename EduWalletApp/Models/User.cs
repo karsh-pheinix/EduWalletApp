@@ -51,6 +51,8 @@ namespace EduWalletApp.Models
 
         public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
+        public DateTimeOffset? LastActiveAt { get; set; }
+
         public ICollection<Account> Accounts { get; set; } = new List<Account>();
         public ICollection<IncomeSource> IncomeSources { get; set; } = new List<IncomeSource>();
         public ICollection<Expense> Expenses { get; set; } = new List<Expense>();
@@ -59,5 +61,7 @@ namespace EduWalletApp.Models
         public ICollection<BankStatement> BankStatements { get; set; } = new List<BankStatement>();
         public ICollection<Report> Reports { get; set; } = new List<Report>();
         public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
+        public ICollection<ActivityLog> ActivityLogs { get; set; } = new List<ActivityLog>();
+        public ICollection<Feedback> FeedbackEntries { get; set; } = new List<Feedback>();
     }
 }

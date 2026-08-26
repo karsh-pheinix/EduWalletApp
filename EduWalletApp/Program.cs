@@ -13,7 +13,7 @@ namespace EduWalletApp
 {
     internal class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
 
@@ -57,7 +57,7 @@ namespace EduWalletApp
             {
                 options.AddPolicy("AllowFrontend", policy =>
                 {
-                    policy.WithOrigins("http://localhost:5173", "http://localhost:5174", "http://localhost:5177")
+                    policy.WithOrigins("http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "https://soit-iis.mandela.ac.za")
                         .AllowAnyHeader()
                         .AllowAnyMethod()
                         .AllowCredentials();
@@ -93,8 +93,45 @@ namespace EduWalletApp
             builder.Services.AddScoped<FinanceCalculator>();
             builder.Services.AddScoped<ArchetypeCalculator>();
             builder.Services.AddScoped<IDashboardService, DashboardService>();
+            builder.Services.AddScoped<IActivityLogger, ActivityLogger>();
+            builder.Services.AddScoped<ITipMatchingService, TipMatchingService>();
+            builder.Services.AddScoped<IFinancialAlertService, FinancialAlertService>();
+            builder.Services.AddScoped<ISpendingInsightService, SpendingInsightService>();
 
             var app = builder.Build();
+
+            using (var scope = app.Services.CreateScope())
+            {
+                var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                await dbContext.Database.MigrateAsync();
+
+                var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<int>>>();
+                var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+                foreach (var role in new[] { "Admin", "User" })
+                    if (!await roleManager.RoleExistsAsync(role))
+                        await roleManager.CreateAsync(new IdentityRole<int>(role));
+
+                var adminEmail = app.Configuration["Admin:Email"];
+                var adminPassword = app.Configuration["Admin:Password"];
+                if (!string.IsNullOrWhiteSpace(adminEmail) && !string.IsNullOrWhiteSpace(adminPassword) &&
+                    await userManager.FindByEmailAsync(adminEmail) is null)
+                {
+                    var admin = new User
+                    {
+                        UserName = adminEmail,
+                        Email = adminEmail,
+                        EmailConfirmed = true,
+                        FirstName = "EduWallet",
+                        LastName = "Admin",
+                        StudentIdNumber = "ADMIN",
+                        University = "EduWallet",
+                        YearOfStudy = 0,
+                        City = ""
+                    };
+                    var result = await userManager.CreateAsync(admin, adminPassword);
+                    if (result.Succeeded) await userManager.AddToRoleAsync(admin, "Admin");
+                }
+            }
 
             // --- Global exception handling ---
             app.UseMiddleware<EduWalletApp.Middleware.ExceptionHandlingMiddleware>();
@@ -106,12 +143,18 @@ namespace EduWalletApp
                 app.UseSwaggerUI();
             }
 
+            
+
             // Comment out HTTPS Redirection during pure HTTP local testing to fix:
             // "Failed to determine the https port for redirect."
             // app.UseHttpsRedirection();
 
             app.UseCors("AllowFrontend"); // Ensure CORS runs BEFORE authentication & static files
 
+            //app.UseCors("AllowReact");
+
+            app.UseDefaultFiles();
+            app.UseHttpsRedirection();
             // Create wwwroot if missing to suppress StaticFileMiddleware warning
             var wwwroot = Path.Combine(app.Environment.ContentRootPath, "wwwroot");
             if (!Directory.Exists(wwwroot))
@@ -122,10 +165,11 @@ namespace EduWalletApp
 
             app.UseAuthentication();
             app.UseAuthorization();
+            app.UseMiddleware<EduWalletApp.Middleware.ActivityTrackingMiddleware>();
             app.UseRateLimiter();
 
             app.MapControllers();
-
+            app.MapFallbackToFile("index.html"); // For SPA routing, if needed
             app.Run();
         }
     }

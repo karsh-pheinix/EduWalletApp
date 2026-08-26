@@ -1,6 +1,7 @@
 ﻿using EduWalletApp.Data;
 using EduWalletApp.DTOs;
 using EduWalletApp.Models;
+using EduWalletApp.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,10 +15,14 @@ namespace EduWalletApp.Controllers
     public class ExpenseController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IActivityLogger _activityLogger;
+        private readonly IFinancialAlertService _alertService;
 
-        public ExpenseController(ApplicationDbContext context)
+        public ExpenseController(ApplicationDbContext context, IActivityLogger activityLogger, IFinancialAlertService alertService)
         {
             _context = context;
+            _activityLogger = activityLogger;
+            _alertService = alertService;
         }
 
         private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -58,6 +63,8 @@ namespace EduWalletApp.Controllers
 
             _context.Expenses.Add(expense);
             await _context.SaveChangesAsync();
+            await _activityLogger.LogAsync(CurrentUserId, "CreatedExpense", $"amount={expense.Amount}");
+            await _alertService.CheckAndCreateAlertsAsync(CurrentUserId);
 
             return Ok(new { expense.Id, expense.Label, expense.Type, expense.Amount, expense.Frequency, expense.IsMandatory });
         }

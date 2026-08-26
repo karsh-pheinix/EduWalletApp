@@ -7,6 +7,10 @@
         public decimal TotalMandatoryExpenses { get; set; }
         public decimal DisposableIncome { get; set; }
         public decimal DailyEquivalent { get; set; }
+        public decimal TotalBudgeted { get; set; }
+        public decimal TotalSpent { get; set; }
+        public decimal Remaining { get; set; }
+        public string Status { get; set; } = "On Track";
         public string? Archetype { get; set; }
         public List<RecentTransactionDto> RecentTransactions { get; set; } = new();
         public List<CategoryBudgetOverviewDto> CategoryBreakdown { get; set; } = new();
@@ -25,8 +29,9 @@
     {
         public int CategoryId { get; set; }
         public string CategoryName { get; set; } = string.Empty;
-        public decimal Allocated { get; set; }
-        public decimal Spent { get; set; }
-        public decimal Remaining => Allocated - Spent;
+        public decimal Budgeted { get; set; }
+        public decimal ActualSpent { get; set; }
+        public decimal Remaining { get; set; }
+        public string Status { get; set; } = "On Track";
     }
 }

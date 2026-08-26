@@ -8,6 +8,7 @@ namespace EduWalletApp.Models
 
         [Required]
         public string Name { get; set; } = string.Empty;
+        public bool IsActive { get; set; } = true;
 
         public ICollection<SubCategory> SubCategories { get; set; } = new List<SubCategory>();
         public ICollection<BudgetAllocation> BudgetAllocations { get; set; } = new List<BudgetAllocation>();

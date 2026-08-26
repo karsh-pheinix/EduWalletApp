@@ -27,5 +27,6 @@ namespace EduWalletApp.Models
         public bool IsRead { get; set; } = false;
 
         public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+        public string? AlertKey { get; set; }
     }
 }

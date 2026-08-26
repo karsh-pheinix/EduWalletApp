@@ -10,6 +10,14 @@ namespace EduWalletApp.Models
         General = 3
     }
 
+    public enum TipTriggerType
+    {
+        General = 0,
+        OverBudget = 1,
+        LowSavings = 2,
+        NegativeDisposableIncome = 3
+    }
+
     public class FinancialTip
     {
         public int Id { get; set; }
@@ -23,5 +31,9 @@ namespace EduWalletApp.Models
         public TipCategory Category { get; set; }
 
         public DateTimeOffset PublishedAt { get; set; } = DateTimeOffset.UtcNow;
+        public TipTriggerType TriggerType { get; set; } = TipTriggerType.General;
+        public decimal? ThresholdPercentage { get; set; }
+        public int? TargetCategoryId { get; set; }
+        public Category? TargetCategory { get; set; }
     }
 }

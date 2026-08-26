@@ -1,6 +1,7 @@
 ﻿using EduWalletApp.Data;
 using EduWalletApp.DTOs;
 using EduWalletApp.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +9,7 @@ namespace EduWalletApp.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize(Roles = "Admin")]
     public class SubCategoryController : ControllerBase
     {
         private readonly ApplicationDbContext _context;

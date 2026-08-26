@@ -24,24 +24,30 @@ namespace EduWalletApp.Data
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<FinancialTip> FinancialTips { get; set; }
         public DbSet<LocationService> LocationServices { get; set; }
+        public DbSet<ActivityLog> ActivityLogs { get; set; }
+        public DbSet<Feedback> Feedback { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
+            modelBuilder.Entity<Category>().HasIndex(c => c.Name).IsUnique();
+            modelBuilder.Entity<FinancialTip>().HasOne(t => t.TargetCategory).WithMany()
+                .HasForeignKey(t => t.TargetCategoryId).OnDelete(DeleteBehavior.SetNull);
+
             // --- Decimal precision ---
-            modelBuilder.Entity<IncomeSource>().Property(i => i.Amount).HasPrecision(10, 2);
-            modelBuilder.Entity<Expense>().Property(e => e.Amount).HasPrecision(10, 2);
+            modelBuilder.Entity<IncomeSource>().Property(i => i.Amount).HasPrecision(18, 2);
+            modelBuilder.Entity<Expense>().Property(e => e.Amount).HasPrecision(18, 2);
             modelBuilder.Entity<Budget>().Property(b => b.SavingsGoalPercentage).HasPrecision(5, 2);
-            modelBuilder.Entity<BudgetAllocation>().Property(b => b.Amount).HasPrecision(10, 2);
-            modelBuilder.Entity<BudgetAllocation>().Property(b => b.SuggestedCap).HasPrecision(10, 2);
-            modelBuilder.Entity<Transaction>().Property(t => t.Amount).HasPrecision(10, 2);
-            modelBuilder.Entity<StatementTransaction>().Property(t => t.Amount).HasPrecision(10, 2);
-            modelBuilder.Entity<Report>().Property(r => r.TotalIncome).HasPrecision(10, 2);
-            modelBuilder.Entity<Report>().Property(r => r.TotalSavings).HasPrecision(10, 2);
-            modelBuilder.Entity<Report>().Property(r => r.TotalMandatoryExpenses).HasPrecision(10, 2);
-            modelBuilder.Entity<Report>().Property(r => r.TotalDisposableIncome).HasPrecision(10, 2);
-            modelBuilder.Entity<Report>().Property(r => r.TotalActualSpend).HasPrecision(10, 2);
+            modelBuilder.Entity<BudgetAllocation>().Property(b => b.BudgetedAmount).HasColumnName("Amount").HasPrecision(18, 2);
+            modelBuilder.Entity<BudgetAllocation>().Property(b => b.SuggestedCap).HasPrecision(18, 2);
+            modelBuilder.Entity<Transaction>().Property(t => t.Amount).HasPrecision(18, 2);
+            modelBuilder.Entity<StatementTransaction>().Property(t => t.Amount).HasPrecision(18, 2);
+            modelBuilder.Entity<Report>().Property(r => r.TotalIncome).HasPrecision(18, 2);
+            modelBuilder.Entity<Report>().Property(r => r.TotalSavings).HasPrecision(18, 2);
+            modelBuilder.Entity<Report>().Property(r => r.TotalMandatoryExpenses).HasPrecision(18, 2);
+            modelBuilder.Entity<Report>().Property(r => r.TotalDisposableIncome).HasPrecision(18, 2);
+            modelBuilder.Entity<Report>().Property(r => r.TotalActualSpend).HasPrecision(18, 2);
 
             // --- Cascade-delete conflict prevention ---
             // Transaction reaches User both directly (UserId) and indirectly

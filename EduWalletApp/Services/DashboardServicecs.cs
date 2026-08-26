@@ -34,7 +34,8 @@ namespace EduWalletApp.Services
             var activeBudget = await _context.Budgets
                 .AsNoTracking()
                 .Where(b => b.UserId == userId)
-                .OrderByDescending(b => b.CreatedAt)
+                .OrderByDescending(b => b.StartDate)
+                .ThenByDescending(b => b.CreatedAt)
                 .FirstOrDefaultAsync();
 
             var savingsGoalPercentage = activeBudget?.SavingsGoalPercentage ?? 0m;
@@ -60,22 +61,40 @@ namespace EduWalletApp.Services
                 .ToListAsync();
 
             var categoryBreakdown = new List<CategoryBudgetOverviewDto>();
+            var totalBudgeted = 0m;
+            var totalSpent = 0m;
 
             if (activeBudget != null)
             {
-                categoryBreakdown = await _context.BudgetAllocations
+                var rawCategoryBreakdown = await _context.BudgetAllocations
                     .AsNoTracking()
+                    .Include(ba => ba.Transactions)
                     .Where(ba => ba.BudgetId == activeBudget.Id)
-                    .Select(ba => new CategoryBudgetOverviewDto
+                    .Select(ba => new
                     {
                         CategoryId = ba.CategoryId,
                         CategoryName = ba.Category.Name,
-                        Allocated = ba.Amount,
-                        Spent = _context.Transactions
-                            .Where(t => t.UserId == userId && t.CategoryId == ba.CategoryId)
-                            .Sum(t => (decimal?)t.Amount) ?? 0m
+                        Budgeted = ba.BudgetedAmount,
+                        ActualSpent = ba.Transactions
+                            .Where(t => t.UserId == userId && t.Date >= activeBudget.StartDate && t.Date <= activeBudget.EndDate)
+                            .Sum(t => t.Amount)
                     })
                     .ToListAsync();
+
+                categoryBreakdown = rawCategoryBreakdown
+                    .Select(item => new CategoryBudgetOverviewDto
+                    {
+                        CategoryId = item.CategoryId,
+                        CategoryName = item.CategoryName,
+                        Budgeted = item.Budgeted,
+                        ActualSpent = item.ActualSpent,
+                        Remaining = item.Budgeted - item.ActualSpent,
+                        Status = item.ActualSpent > item.Budgeted ? $"Overspent by R{item.ActualSpent - item.Budgeted:N2}" : "On Track"
+                    })
+                    .ToList();
+
+                totalBudgeted = categoryBreakdown.Sum(item => item.Budgeted);
+                totalSpent = categoryBreakdown.Sum(item => item.ActualSpent);
             }
 
             return new DashboardSummaryDto
@@ -84,7 +103,11 @@ namespace EduWalletApp.Services
                 SavingsAmount = savingsAmount,
                 TotalMandatoryExpenses = totalMandatory,
                 DisposableIncome = disposable,
-                DailyEquivalent = disposable / 22m,
+                DailyEquivalent = disposable / 30m,
+                TotalBudgeted = totalBudgeted,
+                TotalSpent = totalSpent,
+                Remaining = totalBudgeted - totalSpent,
+                Status = totalSpent > totalBudgeted ? $"Overspent by R{totalSpent - totalBudgeted:N2}" : "On Track",
                 Archetype = user?.Archetype?.ToString(),
                 RecentTransactions = recentTransactions,
                 CategoryBreakdown = categoryBreakdown

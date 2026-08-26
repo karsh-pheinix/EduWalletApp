@@ -16,11 +16,15 @@ namespace EduWalletApp.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly FinanceCalculator _calculator;
+        private readonly IActivityLogger _activityLogger;
+        private readonly IFinancialAlertService _alertService;
 
-        public BudgetController(ApplicationDbContext context, FinanceCalculator calculator)
+        public BudgetController(ApplicationDbContext context, FinanceCalculator calculator, IActivityLogger activityLogger, IFinancialAlertService alertService)
         {
             _context = context;
             _calculator = calculator;
+            _activityLogger = activityLogger;
+            _alertService = alertService;
         }
 
         private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -39,6 +43,8 @@ namespace EduWalletApp.Controllers
 
             _context.Budgets.Add(budget);
             await _context.SaveChangesAsync();
+            await _activityLogger.LogAsync(CurrentUserId, "CreatedBudget", $"budgetId={budget.Id}");
+            await _alertService.CheckAndCreateAlertsAsync(CurrentUserId);
 
             return Ok(new { budgetId = budget.Id });
         }
@@ -140,7 +146,7 @@ namespace EduWalletApp.Controllers
                 BudgetId = budgetId,
                 CategoryId = dto.CategoryId,
                 SubCategoryId = dto.SubCategoryId,
-                Amount = dto.Amount,
+                BudgetedAmount = dto.Amount,
                 LocationTag = dto.LocationTag,
                 IsUnderReview = isUnderReview,
                 SuggestedCap = suggestedCap
@@ -170,10 +176,12 @@ namespace EduWalletApp.Controllers
                 .Select(a => new
                 {
                     a.Id,
-                    a.Amount,
+                    BudgetedAmount = a.BudgetedAmount,
                     a.LocationTag,
                     a.IsUnderReview,
                     a.SuggestedCap,
+                    a.CategoryId,
+                    a.SubCategoryId,
                     CategoryName = a.Category.Name,
                     SubCategoryName = a.SubCategory != null ? a.SubCategory.Name : null
                 })
@@ -194,10 +202,12 @@ namespace EduWalletApp.Controllers
                 .Select(a => new
                 {
                     a.Id,
-                    a.Amount,
+                    BudgetedAmount = a.BudgetedAmount,
                     a.LocationTag,
                     a.IsUnderReview,
                     a.SuggestedCap,
+                    a.CategoryId,
+                    a.SubCategoryId,
                     CategoryName = a.Category.Name,
                     SubCategoryName = a.SubCategory != null ? a.SubCategory.Name : null
                 })
@@ -219,6 +229,17 @@ namespace EduWalletApp.Controllers
                 .FirstOrDefaultAsync(a => a.Id == allocationId && a.BudgetId == budgetId);
             if (allocation == null) return NotFound();
 
+            var categoryExists = await _context.Categories
+                .AnyAsync(category => category.Id == dto.CategoryId && category.IsActive);
+            if (!categoryExists) return BadRequest("The selected category is invalid.");
+
+            if (dto.SubCategoryId.HasValue)
+            {
+                var subCategoryMatches = await _context.SubCategories
+                    .AnyAsync(subCategory => subCategory.Id == dto.SubCategoryId.Value && subCategory.CategoryId == dto.CategoryId);
+                if (!subCategoryMatches) return BadRequest("The selected subcategory is invalid.");
+            }
+
             var incomes = await _context.IncomeSources.Where(i => i.UserId == CurrentUserId && i.IsActive).ToListAsync();
             var mandatory = await _context.Expenses.Where(e => e.UserId == CurrentUserId && e.IsMandatory).ToListAsync();
             var disposable = _calculator.CalculateDisposableIncome(incomes, mandatory, budget.SavingsGoalPercentage);
@@ -228,7 +249,7 @@ namespace EduWalletApp.Controllers
 
             allocation.CategoryId = dto.CategoryId;
             allocation.SubCategoryId = dto.SubCategoryId;
-            allocation.Amount = dto.Amount;
+            allocation.BudgetedAmount = dto.Amount;
             allocation.LocationTag = dto.LocationTag;
             allocation.IsUnderReview = isUnderReview;
             allocation.SuggestedCap = suggestedCap;
@@ -252,8 +273,14 @@ namespace EduWalletApp.Controllers
             if (!budgetExists) return NotFound();
 
             var allocation = await _context.BudgetAllocations
+                .Include(a => a.Transactions)
                 .FirstOrDefaultAsync(a => a.Id == allocationId && a.BudgetId == budgetId);
             if (allocation == null) return NotFound();
+
+            if (allocation.Transactions.Any())
+            {
+                _context.Transactions.RemoveRange(allocation.Transactions);
+            }
 
             _context.BudgetAllocations.Remove(allocation);
             await _context.SaveChangesAsync();
