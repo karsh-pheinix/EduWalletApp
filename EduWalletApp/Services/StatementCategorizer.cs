@@ -44,14 +44,23 @@ namespace EduWalletApp.Services
         {
             if (string.IsNullOrWhiteSpace(description)) return (null, null);
 
-            foreach (var category in categories)
+            // Prefer the most specific matching subcategory, even when the
+            // parent category name is not present in the statement text.
+            foreach (var category in categories.OrderByDescending(c => c.Name.Length))
+            {
+                var subMatch = category.SubCategories
+                    .OrderByDescending(sc => sc.Name.Length)
+                    .FirstOrDefault(sc => description.Contains(sc.Name, StringComparison.OrdinalIgnoreCase));
+                if (subMatch != null)
+                {
+                    return (category.Id, subMatch.Id);
+                }
+            }
+
+            foreach (var category in categories.OrderByDescending(c => c.Name.Length))
             {
                 if (description.Contains(category.Name, StringComparison.OrdinalIgnoreCase))
-                {
-                    var subMatch = category.SubCategories
-                        .FirstOrDefault(sc => description.Contains(sc.Name, StringComparison.OrdinalIgnoreCase));
-                    return (category.Id, subMatch?.Id);
-                }
+                    return (category.Id, null);
             }
 
             foreach (var (keyword, canonicalName) in KeywordToCategory)

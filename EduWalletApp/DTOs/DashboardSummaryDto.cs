@@ -12,6 +12,9 @@
         public decimal Remaining { get; set; }
         public string Status { get; set; } = "On Track";
         public string? Archetype { get; set; }
+        public decimal ForecastDailySpend { get; set; }
+        public decimal Forecast30DayBalance { get; set; }
+        public bool ForecastAtRisk { get; set; }
         public List<RecentTransactionDto> RecentTransactions { get; set; } = new();
         public List<CategoryBudgetOverviewDto> CategoryBreakdown { get; set; } = new();
     }

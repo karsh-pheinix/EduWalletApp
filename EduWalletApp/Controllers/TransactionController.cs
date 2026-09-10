@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using System.Data;
 
 namespace EduWalletApp.Controllers
 {
@@ -34,9 +35,21 @@ namespace EduWalletApp.Controllers
             {
                 var allocation = await _context.BudgetAllocations
                     .Where(a => a.Id == dto.BudgetAllocationId.Value && a.Budget.UserId == userId)
-                    .Select(a => new { a.CategoryId, a.SubCategoryId })
+                    .Select(a => new
+                    {
+                        a.CategoryId,
+                        a.SubCategoryId,
+                        CategoryIsActive = a.Category.IsActive,
+                        BudgetStartDate = a.Budget.StartDate,
+                        BudgetEndDate = a.Budget.EndDate
+                    })
                     .FirstOrDefaultAsync();
                 if (allocation == null) return BadRequest("The selected budget allocation is invalid.");
+                if (!allocation.CategoryIsActive) return BadRequest("The selected budget allocation uses an inactive category.");
+                if (dto.Date < allocation.BudgetStartDate || dto.Date > allocation.BudgetEndDate)
+                {
+                    return BadRequest($"The transaction date must be between {allocation.BudgetStartDate:yyyy-MM-dd} and {allocation.BudgetEndDate:yyyy-MM-dd}.");
+                }
 
                 dto.CategoryId = allocation.CategoryId;
                 dto.SubCategoryId = allocation.SubCategoryId;
@@ -44,6 +57,29 @@ namespace EduWalletApp.Controllers
             else if (!await _context.Categories.AnyAsync(category => category.Id == dto.CategoryId && category.IsActive))
             {
                 return BadRequest("The selected category is invalid.");
+            }
+
+            if (dto.SubCategoryId.HasValue &&
+                !await _context.SubCategories.AnyAsync(subCategory =>
+                    subCategory.Id == dto.SubCategoryId.Value && subCategory.CategoryId == dto.CategoryId))
+            {
+                return BadRequest("The selected subcategory does not belong to the selected category.");
+            }
+
+            var normalizedLocation = dto.LocationTag?.Trim();
+            await using var transactionScope = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
+            var duplicateExists = await _context.Transactions.AnyAsync(existing =>
+                existing.UserId == userId &&
+                existing.CategoryId == dto.CategoryId &&
+                existing.SubCategoryId == dto.SubCategoryId &&
+                existing.BudgetAllocationId == dto.BudgetAllocationId &&
+                existing.Amount == dto.Amount &&
+                existing.Date == dto.Date &&
+                (existing.LocationTag ?? string.Empty) == (normalizedLocation ?? string.Empty));
+            if (duplicateExists)
+            {
+                return Conflict("An identical transaction already exists.");
             }
 
             var transaction = new Transaction
@@ -54,11 +90,12 @@ namespace EduWalletApp.Controllers
                 SubCategoryId = dto.SubCategoryId,
                 Amount = dto.Amount,
                 Date = dto.Date,
-                LocationTag = dto.LocationTag
+                LocationTag = normalizedLocation
             };
 
             _context.Transactions.Add(transaction);
             await _context.SaveChangesAsync();
+            await transactionScope.CommitAsync();
             await _activityLogger.LogAsync(userId, "CreatedTransaction", $"amount={transaction.Amount}");
             await _alertService.CheckAndCreateAlertsAsync(userId);
 
@@ -82,8 +119,12 @@ namespace EduWalletApp.Controllers
                     a.SubCategoryId,
                     CategoryName = a.Category.Name,
                     Planned = a.BudgetedAmount,
-                    Actual = a.Transactions.Sum(t => t.Amount),
-                    Variance = a.BudgetedAmount - a.Transactions.Sum(t => t.Amount)
+                    Actual = a.Transactions
+                        .Where(t => t.Date >= a.Budget.StartDate && t.Date <= a.Budget.EndDate)
+                        .Sum(t => t.Amount),
+                    Variance = a.BudgetedAmount - a.Transactions
+                        .Where(t => t.Date >= a.Budget.StartDate && t.Date <= a.Budget.EndDate)
+                        .Sum(t => t.Amount)
                 })
                 .ToListAsync();
 
@@ -99,7 +140,9 @@ namespace EduWalletApp.Controllers
             if (budgetId.HasValue)
             {
                 query = query.Where(t => t.BudgetAllocationId != null
-                    && t.BudgetAllocation!.BudgetId == budgetId.Value);
+                    && t.BudgetAllocation!.BudgetId == budgetId.Value
+                    && t.Date >= t.BudgetAllocation.Budget.StartDate
+                    && t.Date <= t.BudgetAllocation.Budget.EndDate);
             }
 
             var transactions = await query

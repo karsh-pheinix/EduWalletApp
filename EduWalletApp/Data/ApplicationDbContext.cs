@@ -34,6 +34,7 @@ namespace EduWalletApp.Data
             modelBuilder.Entity<Category>().HasIndex(c => c.Name).IsUnique();
             modelBuilder.Entity<FinancialTip>().HasOne(t => t.TargetCategory).WithMany()
                 .HasForeignKey(t => t.TargetCategoryId).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<FinancialTip>().Property(t => t.ThresholdPercentage).HasPrecision(5, 2);
 
             // --- Decimal precision ---
             modelBuilder.Entity<IncomeSource>().Property(i => i.Amount).HasPrecision(18, 2);
@@ -43,6 +44,10 @@ namespace EduWalletApp.Data
             modelBuilder.Entity<BudgetAllocation>().Property(b => b.SuggestedCap).HasPrecision(18, 2);
             modelBuilder.Entity<Transaction>().Property(t => t.Amount).HasPrecision(18, 2);
             modelBuilder.Entity<StatementTransaction>().Property(t => t.Amount).HasPrecision(18, 2);
+            modelBuilder.Entity<IncomeSource>().Property(i => i.StartDate).HasColumnType("date");
+            modelBuilder.Entity<IncomeSource>().Property(i => i.EndDate).HasColumnType("date");
+            modelBuilder.Entity<Expense>().Property(e => e.StartDate).HasColumnType("date");
+            modelBuilder.Entity<Expense>().Property(e => e.EndDate).HasColumnType("date");
             modelBuilder.Entity<Report>().Property(r => r.TotalIncome).HasPrecision(18, 2);
             modelBuilder.Entity<Report>().Property(r => r.TotalSavings).HasPrecision(18, 2);
             modelBuilder.Entity<Report>().Property(r => r.TotalMandatoryExpenses).HasPrecision(18, 2);

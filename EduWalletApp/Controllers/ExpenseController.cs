@@ -32,6 +32,7 @@ namespace EduWalletApp.Controllers
         {
             var expenses = await _context.Expenses
                 .Where(e => e.UserId == CurrentUserId)
+                .Where(e => e.EndDate == null || e.EndDate >= DateOnly.FromDateTime(DateTime.UtcNow))
                 .Select(e => new
                 {
                     e.Id,
@@ -40,6 +41,8 @@ namespace EduWalletApp.Controllers
                     e.Amount,
                     e.Frequency,
                     e.IsMandatory
+                    ,e.StartDate
+                    ,e.EndDate
                 })
                 .ToListAsync();
 
@@ -50,6 +53,8 @@ namespace EduWalletApp.Controllers
         public async Task<IActionResult> CreateExpense([FromBody] ExpenseCrudDto dto)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
+            if (dto.EndDate.HasValue && dto.EndDate < dto.StartDate)
+                return BadRequest("End date must be on or after the start date.");
 
             var expense = new Expense
             {
@@ -59,6 +64,8 @@ namespace EduWalletApp.Controllers
                 Amount = dto.Amount,
                 Frequency = dto.Frequency,
                 IsMandatory = dto.IsMandatory
+                ,StartDate = dto.StartDate
+                ,EndDate = dto.EndDate
             };
 
             _context.Expenses.Add(expense);
@@ -66,13 +73,15 @@ namespace EduWalletApp.Controllers
             await _activityLogger.LogAsync(CurrentUserId, "CreatedExpense", $"amount={expense.Amount}");
             await _alertService.CheckAndCreateAlertsAsync(CurrentUserId);
 
-            return Ok(new { expense.Id, expense.Label, expense.Type, expense.Amount, expense.Frequency, expense.IsMandatory });
+            return Ok(new { expense.Id, expense.Label, expense.Type, expense.Amount, expense.Frequency, expense.IsMandatory, expense.StartDate, expense.EndDate });
         }
 
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateExpense(int id, [FromBody] ExpenseCrudDto dto)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
+            if (dto.EndDate.HasValue && dto.EndDate < dto.StartDate)
+                return BadRequest("End date must be on or after the start date.");
 
             var expense = await _context.Expenses
                 .FirstOrDefaultAsync(e => e.Id == id && e.UserId == CurrentUserId);
@@ -84,10 +93,12 @@ namespace EduWalletApp.Controllers
             expense.Amount = dto.Amount;
             expense.Frequency = dto.Frequency;
             expense.IsMandatory = dto.IsMandatory;
+            expense.StartDate = dto.StartDate;
+            expense.EndDate = dto.EndDate;
 
             await _context.SaveChangesAsync();
 
-            return Ok(new { expense.Id, expense.Label, expense.Type, expense.Amount, expense.Frequency, expense.IsMandatory });
+            return Ok(new { expense.Id, expense.Label, expense.Type, expense.Amount, expense.Frequency, expense.IsMandatory, expense.StartDate, expense.EndDate });
         }
 
         [HttpDelete("{id}")]

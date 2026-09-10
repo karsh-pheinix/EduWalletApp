@@ -13,5 +13,8 @@ namespace EduWalletApp.DTOs
 
         [Required]
         public IncomeFrequency Frequency { get; set; }
+
+        public DateOnly StartDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+        public DateOnly? EndDate { get; set; }
     }
 }

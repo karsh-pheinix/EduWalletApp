@@ -34,6 +34,20 @@ namespace EduWalletApp.Controllers
         [HttpPost]
         public async Task<IActionResult> CreateBudget([FromBody] CreateBudgetDto dto)
         {
+            if (dto.StartDate > dto.EndDate)
+            {
+                return BadRequest("The budget start date must be on or before the end date.");
+            }
+
+            var duplicateExists = await _context.Budgets.AnyAsync(b =>
+                b.UserId == CurrentUserId &&
+                b.StartDate == dto.StartDate &&
+                b.EndDate == dto.EndDate);
+            if (duplicateExists)
+            {
+                return Conflict("A budget period with these dates already exists.");
+            }
+
             var budget = new Budget
             {
                 UserId = CurrentUserId,
@@ -94,6 +108,21 @@ namespace EduWalletApp.Controllers
 
             if (budget == null) return NotFound();
 
+            if (dto.StartDate > dto.EndDate)
+            {
+                return BadRequest("The budget start date must be on or before the end date.");
+            }
+
+            var duplicateExists = await _context.Budgets.AnyAsync(b =>
+                b.Id != budgetId &&
+                b.UserId == CurrentUserId &&
+                b.StartDate == dto.StartDate &&
+                b.EndDate == dto.EndDate);
+            if (duplicateExists)
+            {
+                return Conflict("A budget period with these dates already exists.");
+            }
+
             budget.StartDate = dto.StartDate;
             budget.EndDate = dto.EndDate;
             budget.SavingsGoalPercentage = dto.SavingsGoalPercentage;
@@ -134,8 +163,11 @@ namespace EduWalletApp.Controllers
                 .FirstOrDefaultAsync(b => b.Id == budgetId && b.UserId == CurrentUserId);
             if (budget == null) return NotFound();
 
-            var incomes = await _context.IncomeSources.Where(i => i.UserId == CurrentUserId && i.IsActive).ToListAsync();
-            var mandatory = await _context.Expenses.Where(e => e.UserId == CurrentUserId && e.IsMandatory).ToListAsync();
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var incomes = await _context.IncomeSources.Where(i => i.UserId == CurrentUserId && i.IsActive
+                && i.StartDate <= today && (i.EndDate == null || i.EndDate >= today)).ToListAsync();
+            var mandatory = await _context.Expenses.Where(e => e.UserId == CurrentUserId && e.IsMandatory
+                && e.StartDate <= today && (e.EndDate == null || e.EndDate >= today)).ToListAsync();
             var disposable = _calculator.CalculateDisposableIncome(incomes, mandatory, budget.SavingsGoalPercentage);
 
             var isUnderReview = _calculator.IsUnderReview(dto.Amount, disposable);
@@ -240,8 +272,11 @@ namespace EduWalletApp.Controllers
                 if (!subCategoryMatches) return BadRequest("The selected subcategory is invalid.");
             }
 
-            var incomes = await _context.IncomeSources.Where(i => i.UserId == CurrentUserId && i.IsActive).ToListAsync();
-            var mandatory = await _context.Expenses.Where(e => e.UserId == CurrentUserId && e.IsMandatory).ToListAsync();
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var incomes = await _context.IncomeSources.Where(i => i.UserId == CurrentUserId && i.IsActive
+                && i.StartDate <= today && (i.EndDate == null || i.EndDate >= today)).ToListAsync();
+            var mandatory = await _context.Expenses.Where(e => e.UserId == CurrentUserId && e.IsMandatory
+                && e.StartDate <= today && (e.EndDate == null || e.EndDate >= today)).ToListAsync();
             var disposable = _calculator.CalculateDisposableIncome(incomes, mandatory, budget.SavingsGoalPercentage);
 
             var isUnderReview = _calculator.IsUnderReview(dto.Amount, disposable);

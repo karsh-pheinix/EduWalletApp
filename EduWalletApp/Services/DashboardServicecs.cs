@@ -24,11 +24,15 @@ namespace EduWalletApp.Services
             var incomes = await _context.IncomeSources
                 .AsNoTracking()
                 .Where(i => i.UserId == userId && i.IsActive)
+                .Where(i => i.StartDate <= DateOnly.FromDateTime(DateTime.UtcNow)
+                    && (i.EndDate == null || i.EndDate >= DateOnly.FromDateTime(DateTime.UtcNow)))
                 .ToListAsync();
 
             var mandatoryExpenses = await _context.Expenses
                 .AsNoTracking()
                 .Where(e => e.UserId == userId && e.IsMandatory)
+                .Where(e => e.StartDate <= DateOnly.FromDateTime(DateTime.UtcNow)
+                    && (e.EndDate == null || e.EndDate >= DateOnly.FromDateTime(DateTime.UtcNow)))
                 .ToListAsync();
 
             var activeBudget = await _context.Budgets
@@ -59,6 +63,14 @@ namespace EduWalletApp.Services
                     Date = t.Date
                 })
                 .ToListAsync();
+
+            var forecastStart = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-30));
+            var recentSpend = await _context.Transactions
+                .AsNoTracking()
+                .Where(t => t.UserId == userId && t.Date >= forecastStart)
+                .SumAsync(t => t.Amount);
+            var forecastDailySpend = recentSpend / 30m;
+            var forecast30DayBalance = disposable - (forecastDailySpend * 30m);
 
             var categoryBreakdown = new List<CategoryBudgetOverviewDto>();
             var totalBudgeted = 0m;
@@ -109,6 +121,9 @@ namespace EduWalletApp.Services
                 Remaining = totalBudgeted - totalSpent,
                 Status = totalSpent > totalBudgeted ? $"Overspent by R{totalSpent - totalBudgeted:N2}" : "On Track",
                 Archetype = user?.Archetype?.ToString(),
+                ForecastDailySpend = forecastDailySpend,
+                Forecast30DayBalance = forecast30DayBalance,
+                ForecastAtRisk = forecast30DayBalance < 0,
                 RecentTransactions = recentTransactions,
                 CategoryBreakdown = categoryBreakdown
             };

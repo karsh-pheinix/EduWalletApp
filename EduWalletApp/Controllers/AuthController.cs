@@ -21,19 +21,22 @@ namespace EduWalletApp.Controllers
         private readonly IConfiguration _configuration;
         private readonly ILogger<AuthController> _logger;
         private readonly IActivityLogger _activityLogger;
+        private readonly IEmailNotificationService _emailNotificationService;
 
         public AuthController(
             UserManager<User> userManager,
             ApplicationDbContext context,
             IConfiguration configuration,
             ILogger<AuthController> logger,
-            IActivityLogger activityLogger)
+            IActivityLogger activityLogger,
+            IEmailNotificationService emailNotificationService)
         {
             _userManager = userManager;
             _context = context;
             _configuration = configuration;
             _logger = logger;
             _activityLogger = activityLogger;
+            _emailNotificationService = emailNotificationService;
         }
 
         [HttpPost("register")]
@@ -107,6 +110,68 @@ namespace EduWalletApp.Controllers
                 onboardingComplete = user.OnboardingComplete,
                 isAdmin = roles.Contains("Admin")
             });
+        }
+
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var user = await _userManager.FindByEmailAsync(dto.Email);
+            if (user is null)
+            {
+                _logger.LogWarning("Password reset request for unknown email: {Email}", dto.Email);
+                return Ok(new { message = "If an account exists for that email, a reset link has been sent." });
+            }
+
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var frontendBaseUrl = _configuration["Frontend:ResetPasswordUrl"] ?? "http://localhost:5173/reset-password";
+            var resetLink = $"{frontendBaseUrl}?email={Uri.EscapeDataString(user.Email!)}&token={Uri.EscapeDataString(token)}";
+
+            await _emailNotificationService.SendPasswordResetAsync(user.Email!, resetLink);
+
+            _context.Notifications.Add(new Notification
+            {
+                UserId = user.Id,
+                Type = NotificationType.General,
+                Message = "A password reset link was sent to your email.",
+                AlertKey = $"password-reset:{user.Id}:{DateTimeOffset.UtcNow:O}"
+            });
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Password reset email queued for {Email}", dto.Email);
+            return Ok(new { message = "If an account exists for that email, a reset link has been sent." });
+        }
+
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var user = await _userManager.FindByEmailAsync(dto.Email);
+            if (user is null)
+                return BadRequest(new { message = "Invalid password reset request." });
+
+            var result = await _userManager.ResetPasswordAsync(user, dto.Token, dto.NewPassword);
+            if (!result.Succeeded)
+            {
+                _logger.LogWarning("Password reset failed for {Email}: {Errors}", dto.Email,
+                    string.Join(", ", result.Errors.Select(e => e.Description)));
+                return BadRequest(new { message = "The reset link is invalid or expired." });
+            }
+
+            _context.Notifications.Add(new Notification
+            {
+                UserId = user.Id,
+                Type = NotificationType.General,
+                Message = "Your password was reset successfully.",
+                AlertKey = $"password-reset-success:{user.Id}:{DateTimeOffset.UtcNow:O}"
+            });
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Password reset successful." });
         }
 
         private async Task<string> GenerateAccessToken(User user)

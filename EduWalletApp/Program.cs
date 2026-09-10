@@ -97,6 +97,7 @@ namespace EduWalletApp
             builder.Services.AddScoped<ITipMatchingService, TipMatchingService>();
             builder.Services.AddScoped<IFinancialAlertService, FinancialAlertService>();
             builder.Services.AddScoped<ISpendingInsightService, SpendingInsightService>();
+            builder.Services.AddScoped<IEmailNotificationService, ResendEmailNotificationService>();
 
             var app = builder.Build();
 

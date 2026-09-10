@@ -45,6 +45,13 @@ namespace EduWalletApp.Controllers
             if (dto.File == null || dto.File.Length == 0)
                 return BadRequest("No file was uploaded.");
 
+            if (dto.AccountId.HasValue &&
+                !await _context.Accounts.AnyAsync(account =>
+                    account.Id == dto.AccountId.Value && account.UserId == userId))
+            {
+                return BadRequest("The selected account is invalid.");
+            }
+
             if (dto.File.Length > MaxFileSizeBytes)
                 return BadRequest("File exceeds the 5MB size limit.");
 
@@ -87,6 +94,37 @@ namespace EduWalletApp.Controllers
                 return BadRequest("No transactions could be read. Use a text-based PDF or a CSV containing date, description, and amount columns.");
             }
 
+            // Do not import rows already present for this user's account. This
+            // keeps overlapping statement periods safe without requiring a
+            // schema change or trusting the uploaded file name.
+            var existingRowsQuery = _context.StatementTransactions
+                .Where(row => row.BankStatement.UserId == userId &&
+                    row.BankStatement.Id != statement.Id &&
+                    (dto.AccountId.HasValue
+                        ? row.BankStatement.AccountId == dto.AccountId
+                        : row.BankStatement.AccountId == null));
+            var existingKeys = (await existingRowsQuery
+                .Select(row => new { row.Date, row.Amount, row.Description })
+                .ToListAsync())
+                .Select(row => StatementRowKey(row.Date, row.Amount, row.Description))
+                .ToHashSet(StringComparer.Ordinal);
+
+            var uniqueRows = parsedRows
+                .GroupBy(row => StatementRowKey(row.Date, row.Amount, row.Description), StringComparer.Ordinal)
+                .Select(group => group.First())
+                .Where(row => !existingKeys.Contains(StatementRowKey(row.Date, row.Amount, row.Description)))
+                .ToList();
+
+            if (uniqueRows.Count == 0)
+            {
+                _context.BankStatements.Remove(statement);
+                await _context.SaveChangesAsync();
+                System.IO.File.Delete(filePath);
+                return Conflict("This bank statement contains only transactions that have already been imported.");
+            }
+
+            parsedRows = uniqueRows;
+
             var activeCategories = await _context.Categories
                 .Include(c => c.SubCategories)
                 .Where(c => c.IsActive)
@@ -112,6 +150,16 @@ namespace EduWalletApp.Controllers
                 transactionsFound = parsedRows.Count,
                 insights
             });
+        }
+
+        private static string StatementRowKey(DateOnly date, decimal amount, string description)
+        {
+            return $"{date:O}|{amount.ToString(CultureInfo.InvariantCulture)}|{NormalizeDescription(description)}";
+        }
+
+        private static string NormalizeDescription(string description)
+        {
+            return Regex.Replace(description.Trim(), @"\s+", " ").ToUpperInvariant();
         }
 
         private List<StatementTransaction> ParseCsv(string filePath, int statementId)

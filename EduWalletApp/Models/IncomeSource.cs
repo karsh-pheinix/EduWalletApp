@@ -26,6 +26,9 @@ namespace EduWalletApp.Models
 
         public IncomeFrequency Frequency { get; set; }
 
+        public DateOnly StartDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+        public DateOnly? EndDate { get; set; }
+
         public bool IsActive { get; set; } = true;
 
         public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

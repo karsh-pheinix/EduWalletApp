@@ -42,6 +42,7 @@ namespace EduWalletApp.Controllers
                     Source = dto.Source,
                     Amount = dto.Amount,
                     Frequency = dto.Frequency,
+                    StartDate = dto.StartDate,
                     IsActive = true // <-- CRITICAL FIX: Ensure it shows up in the IncomeSourceController
                 });
             }
@@ -111,6 +112,7 @@ namespace EduWalletApp.Controllers
                     Label = dto.Label,
                     Amount = dto.Amount,
                     Frequency = dto.Frequency,
+                    StartDate = dto.StartDate,
                     IsMandatory = true
                 });
             }

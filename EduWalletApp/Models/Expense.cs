@@ -35,6 +35,9 @@ namespace EduWalletApp.Models
 
         public ExpenseFrequency Frequency { get; set; }
 
+        public DateOnly StartDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+        public DateOnly? EndDate { get; set; }
+
         public bool IsMandatory { get; set; } = true;
 
         public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

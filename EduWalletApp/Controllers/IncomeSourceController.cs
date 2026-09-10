@@ -27,12 +27,15 @@ namespace EduWalletApp.Controllers
         {
             var sources = await _context.IncomeSources
                 .Where(i => i.UserId == CurrentUserId && i.IsActive)
+                .Where(i => i.EndDate == null || i.EndDate >= DateOnly.FromDateTime(DateTime.UtcNow))
                 .Select(i => new
                 {
                     i.Id,
                     i.Source,
                     i.Amount,
                     i.Frequency
+                    ,i.StartDate
+                    ,i.EndDate
                 })
                 .ToListAsync();
 
@@ -43,6 +46,8 @@ namespace EduWalletApp.Controllers
         public async Task<IActionResult> CreateIncomeSource([FromBody] IncomeSourceCrudDto dto)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
+            if (dto.EndDate.HasValue && dto.EndDate < dto.StartDate)
+                return BadRequest("End date must be on or after the start date.");
 
             var source = new IncomeSource
             {
@@ -50,19 +55,23 @@ namespace EduWalletApp.Controllers
                 Source = dto.Source,
                 Amount = dto.Amount,
                 Frequency = dto.Frequency,
+                StartDate = dto.StartDate,
+                EndDate = dto.EndDate,
                 IsActive = true
             };
 
             _context.IncomeSources.Add(source);
             await _context.SaveChangesAsync();
 
-            return Ok(new { source.Id, source.Source, source.Amount, source.Frequency });
+            return Ok(new { source.Id, source.Source, source.Amount, source.Frequency, source.StartDate, source.EndDate });
         }
 
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateIncomeSource(int id, [FromBody] IncomeSourceCrudDto dto)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
+            if (dto.EndDate.HasValue && dto.EndDate < dto.StartDate)
+                return BadRequest("End date must be on or after the start date.");
 
             var source = await _context.IncomeSources
                 .FirstOrDefaultAsync(i => i.Id == id && i.UserId == CurrentUserId);
@@ -72,10 +81,12 @@ namespace EduWalletApp.Controllers
             source.Source = dto.Source;
             source.Amount = dto.Amount;
             source.Frequency = dto.Frequency;
+            source.StartDate = dto.StartDate;
+            source.EndDate = dto.EndDate;
 
             await _context.SaveChangesAsync();
 
-            return Ok(new { source.Id, source.Source, source.Amount, source.Frequency });
+            return Ok(new { source.Id, source.Source, source.Amount, source.Frequency, source.StartDate, source.EndDate });
         }
 
         [HttpDelete("{id}")]

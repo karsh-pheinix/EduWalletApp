@@ -28,7 +28,21 @@ namespace EduWalletApp.Controllers
                 .OrderByDescending(n => n.CreatedAt)
                 .ToListAsync();
 
-            return Ok(notifications);
+            return Ok(notifications.Select(notification => new
+            {
+                notification.Id,
+                notification.Type,
+                notification.Message,
+                notification.IsRead,
+                notification.CreatedAt,
+                Title = notification.Type switch
+                {
+                    Models.NotificationType.LeakageAlert => "Budget alert",
+                    Models.NotificationType.ReviewFlag => "Spending review",
+                    Models.NotificationType.SavingsNudge => "Savings reminder",
+                    _ => "Account update"
+                }
+            }));
         }
 
         [HttpPatch("{id}/read")]

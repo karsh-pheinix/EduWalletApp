@@ -227,6 +227,9 @@ namespace EduWalletApp.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
                     b.Property<int>("Frequency")
                         .HasColumnType("int");
 
@@ -236,6 +239,9 @@ namespace EduWalletApp.Migrations
                     b.Property<string>("Label")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
 
                     b.Property<int>("Type")
                         .HasColumnType("int");
@@ -299,7 +305,8 @@ namespace EduWalletApp.Migrations
                         .HasColumnType("int");
 
                     b.Property<decimal?>("ThresholdPercentage")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -330,6 +337,9 @@ namespace EduWalletApp.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
                     b.Property<int>("Frequency")
                         .HasColumnType("int");
 
@@ -339,6 +349,9 @@ namespace EduWalletApp.Migrations
                     b.Property<string>("Source")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
 
                     b.Property<int>("UserId")
                         .HasColumnType("int");
